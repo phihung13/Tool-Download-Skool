@@ -97,12 +97,110 @@ class App:
             items += sorted(p.name for p in cdir.iterdir() if p.is_dir())
         return items
 
+    # ====================== KIỂM TRA MÔI TRƯỜNG ======================
+    def _ffmpeg_ok(self):
+        import shutil
+        if shutil.which("ffmpeg"): return True
+        try:
+            import ffmpeg_downloader as ffdl
+            return bool(getattr(ffdl, "ffmpeg_path", None))
+        except Exception:
+            return False
+
+    def _chromium_ok(self):
+        base = Path(os.environ.get("LOCALAPPDATA", "")) / "ms-playwright"
+        try: return base.exists() and any(base.glob("chromium-*"))
+        except Exception: return False
+
+    def check_env(self):
+        """Tra ve list (ten, ok, chi_tiet, fix) — fix = (nhan, payload) | None.
+           payload: 'node' (mo trang tai) hoac list lenh subprocess."""
+        import shutil, importlib.util
+        def has(m): return importlib.util.find_spec(m) is not None
+        scripts = Path(PY).parent
+        items = [("Python", True, f"{sys.version_info.major}.{sys.version_info.minor}", None)]
+        node = shutil.which("node")
+        items.append(("Node.js (cho YouTube)", bool(node), node or "thiếu",
+                      None if node else ("Tải Node.js", "node")))
+        ff = self._ffmpeg_ok()
+        items.append(("ffmpeg", ff, "OK" if ff else "thiếu",
+                      None if ff else ("Cài ffmpeg", [str(scripts / "ffdl.exe"), "install", "--add-path"])))
+        for mod, label, pipname in [("yt_dlp", "yt-dlp", "yt-dlp"),
+                                    ("faster_whisper", "faster-whisper", "faster-whisper"),
+                                    ("playwright", "Playwright", "playwright")]:
+            ok = has(mod)
+            items.append((label, ok, "OK" if ok else "thiếu",
+                          None if ok else (f"Cài {label}", [PY, "-m", "pip", "install", "-U", pipname])))
+        chrom = self._chromium_ok()
+        items.append(("Trình duyệt Chromium", chrom, "OK" if chrom else "thiếu",
+                      None if chrom else ("Cài Chromium", [PY, "-m", "playwright", "install", "chromium"])))
+        return items
+
+    def env_missing(self):
+        return [i for i in self.check_env() if not i[1]]
+
+    def show_check(self):
+        self.set_step(1, "Kiểm tra môi trường")
+        self.clear_body()
+        self.title("Kiểm tra môi trường",
+                   "App cần các thành phần dưới đây. Cái nào thiếu có nút cài ngay bên cạnh (Node.js phải tải tay rồi mở lại app).")
+        items = self.check_env()
+        card = tk.Frame(self.body, bg="white", relief="solid", bd=1); card.pack(fill="x", pady=6)
+        for name, ok, detail, fix in items:
+            row = tk.Frame(card, bg="white"); row.pack(fill="x", padx=12, pady=5)
+            tk.Label(row, text=("✓" if ok else "✗"), fg=("#1e7e34" if ok else "#b02a37"),
+                     bg="white", font=(FT, 13, "bold"), width=2).pack(side="left")
+            tk.Label(row, text=f"  {name}", bg="white", font=(FT, 11), width=24, anchor="w").pack(side="left")
+            tk.Label(row, text=detail, bg="white", fg=GREY, font=(FT, 9)).pack(side="left")
+            if (not ok) and fix:
+                big_btn(row, fix[0], (lambda p=fix[1]: self.do_fix(p)), color=BLUE2).pack(side="right")
+        row = tk.Frame(self.body, bg=BG); row.pack(fill="x", pady=12)
+        ttk.Button(row, text="←  Quay lại", command=self.show_step1).pack(side="left")
+        ttk.Button(row, text="↻  Kiểm tra lại", command=self.show_check).pack(side="left", padx=6)
+        if [i for i in items if not i[1] and i[3]]:
+            big_btn(row, "⚙  Cài tất cả còn thiếu", self.fix_all, color=BLUE).pack(side="right")
+
+    def do_fix(self, payload):
+        import webbrowser
+        if payload == "node":
+            webbrowser.open("https://nodejs.org/en/download")
+            messagebox.showinfo("Node.js", "Tải bản LTS, cài xong rồi MỞ LẠI app.")
+        else:
+            self.start(payload, "CÀI ĐẶT", on_done=self.show_check)
+
+    def fix_all(self):
+        import webbrowser
+        cmds = []
+        for name, ok, detail, fix in self.check_env():
+            if ok or not fix: continue
+            if fix[1] == "node":
+                webbrowser.open("https://nodejs.org/en/download")
+            else:
+                cmds.append(fix[1])
+        self._fix_queue = cmds
+        self.write("Đang cài các thành phần còn thiếu...")
+        self._run_next_fix()
+
+    def _run_next_fix(self):
+        if not getattr(self, "_fix_queue", None):
+            self.show_check(); return
+        cmd = self._fix_queue.pop(0)
+        self.start(cmd, "CÀI ĐẶT", on_done=self._run_next_fix)
+
     # ====================== BƯỚC 1: chọn khóa ======================
     def show_step1(self):
         self.set_step(1, "Chọn khóa")
         self.clear_body()
         self.title("Bạn muốn tải khóa nào?",
                    "Chọn một khóa đã có sẵn bên dưới, hoặc thêm khóa mới trực tiếp từ tài khoản Skool của bạn.")
+        try: miss = self.env_missing()
+        except Exception: miss = []
+        if miss:
+            ban = tk.Frame(self.body, bg="#fff3cd", relief="solid", bd=1); ban.pack(fill="x", pady=(0, 8))
+            names = ", ".join(m[0].split(" (")[0] for m in miss)
+            tk.Label(ban, text=f"⚠  Thiếu: {names}", bg="#fff3cd", fg="#8a6d00",
+                     font=(FT, 10, "bold")).pack(side="left", padx=10, pady=6)
+            big_btn(ban, "Kiểm tra & cài", self.show_check, color="#e0a800").pack(side="right", padx=6, pady=4)
         items = self.existing_courses()
         card = tk.Frame(self.body, bg="white", relief="solid", bd=1); card.pack(fill="x", pady=6)
         if items:
@@ -121,6 +219,8 @@ class App:
         big_btn(row, "➕  Thêm khóa mới từ Skool", self.go_import, color=BLUE).pack(side="left")
         if items:
             big_btn(row, "Tiếp tục khóa đã chọn  →", self.use_existing).pack(side="right")
+        foot = tk.Frame(self.body, bg=BG); foot.pack(side="bottom", fill="x", pady=6)
+        ttk.Button(foot, text="⚙  Kiểm tra môi trường", command=self.show_check).pack(side="left")
 
     def use_existing(self):
         v = self.pick_var.get().strip()

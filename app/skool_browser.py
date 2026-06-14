@@ -59,6 +59,8 @@ class SkoolBrowser:
         self.cmd_q = queue.Queue()
         self.evt_q = queue.Queue()
         self.group = None
+        self._p = None
+        self._ctx = None
         self._t = threading.Thread(target=self._run, daemon=True)
         self._t.start()
 
@@ -76,32 +78,59 @@ class SkoolBrowser:
             self.emit(type="error", msg=f"Chua cai Playwright: {e}"); return
         try:
             with sync_playwright() as p:
-                ctx = p.chromium.launch_persistent_context(
-                    str(USER_DATA), headless=False,
-                    viewport={"width": 1200, "height": 800},
-                    args=["--disable-blink-features=AutomationControlled"])
-                page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                page.set_default_timeout(180000)
+                self._p = p
                 self.emit(type="ready")
                 while True:
                     cmd = self.cmd_q.get()
-                    t = cmd.get("type")
-                    if t == "quit":
+                    if cmd.get("type") == "quit":
                         break
                     try:
-                        self._handle(page, cmd)
+                        self._handle(cmd)
                     except Exception as e:
                         self.emit(type="error", msg=str(e))
-                try: ctx.close()
-                except Exception: pass
+                if self._ctx is not None:
+                    try: self._ctx.close()
+                    except Exception: pass
         except Exception as e:
             self.emit(type="error", msg=f"Loi trinh duyet: {e}")
 
-    def _handle(self, page, cmd):
+    def _ensure_ctx(self):
+        """Tao (hoac tao lai neu da bi dong) persistent context."""
+        if self._ctx is None:
+            self._ctx = self._p.chromium.launch_persistent_context(
+                str(USER_DATA), headless=False,
+                viewport={"width": 1200, "height": 800},
+                args=["--disable-blink-features=AutomationControlled"])
+        return self._ctx
+
+    def _live_page(self):
+        """Luon tra ve 1 trang dang song (uu tien skool.com). Tu mo lai neu browser bi dong."""
+        for _ in range(2):
+            ctx = self._ensure_ctx()
+            try:
+                pages = [pg for pg in ctx.pages if not pg.is_closed()]
+                if not pages:
+                    return ctx.new_page()
+                for pg in pages:
+                    try:
+                        if "skool.com" in (pg.url or ""):
+                            return pg
+                    except Exception:
+                        pass
+                return pages[-1]
+            except Exception:
+                self._ctx = None   # browser da dong -> tao lai vong sau
+        raise RuntimeError("Khong mo duoc trang (trinh duyet co the da dong).")
+
+    def _handle(self, cmd):
+        page = self._live_page()
         t = cmd["type"]
         if t == "open":
             self.emit(type="log", msg="Mo Skool... Hay dang nhap va mo trang Classroom cua khoa ban muon.")
-            page.goto("https://www.skool.com/", wait_until="domcontentloaded")
+            if "skool.com" not in (page.url or ""):
+                page.goto("https://www.skool.com/", wait_until="domcontentloaded")
+            try: page.bring_to_front()
+            except Exception: pass
             self.emit(type="opened")
         elif t == "list":
             data = page.evaluate(JS_LIST)
@@ -121,10 +150,14 @@ class SkoolBrowser:
             for idx, c in enumerate(chapters, 1):
                 self.emit(type="dump_progress", i=idx, n=len(chapters), title=c["title"])
                 try:
-                    page.goto(f"https://www.skool.com/{grp}/classroom/{c['id']}", wait_until="domcontentloaded")
+                    page = self._live_page()
+                    page.goto(f"https://www.skool.com/{grp}/classroom/{c['id']}",
+                              wait_until="domcontentloaded", timeout=30000)
                     page.wait_for_function(
                         "() => { try { const d=JSON.parse(document.getElementById('__NEXT_DATA__').textContent);"
-                        " return !!(d.props.pageProps.course && d.props.pageProps.course.children);} catch(e){return false;} }")
+                        " return !!(d.props.pageProps.course && d.props.pageProps.course.children);} catch(e){return false;} }",
+                        timeout=25000)
+                    page.set_default_timeout(150000)   # chuong nhieu bai can lau
                     res = page.evaluate(JS_DUMP)
                     if not res or not res.get("ok"):
                         self.emit(type="log", msg=f"  [bo qua] {c['title']}: {res.get('err') if res else 'loi'}"); continue
