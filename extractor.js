@@ -164,7 +164,38 @@
       console.log('   -> vid__ + meta__ da tai ve Downloads. Chuong khac: skoolDumpChapter()');
     }
   
+    /* ---------- CLAUDE MODE: dump 1 chương va TRA JSON ve (khong tai file) ----------
+       Dung khi Claude lai trinh duyet: Claude goi window.skoolDumpReturn(), nhan {vid,meta}
+       roi tu ghi ra courses/<khoa>/. Token native (base64) co the bi lop an toan che -> chuong
+       native can dump thu cong; chuong YouTube/Loom/text thi Claude lam tron. */
+    async function dumpReturn() {
+      const d = ND(), pp = d.props.pageProps, buildId = d.buildId, cid = d.query.course;
+      if (!pp.course || !pp.course.children) return { ok: false, err: 'not_chapter' };
+      const chapterTitle = (pp.course.course && pp.course.course.metadata && pp.course.course.metadata.title) || cid;
+      const lvs = collectLeaves(pp.course.children, [], []), total = lvs.length;
+      const vidItems = [], metaItems = []; let native = 0, ext = 0, none = 0;
+      for (const lf of lvs) {
+        const m = lf.obj.metadata || {};
+        let url = (m.videoLink || '').trim(), desc = m.desc, resRaw = m.resources, pv = null;
+        for (let a = 0; a < 4; a++) {
+          try {
+            const r = await fetch(`/_next/data/${buildId}/${GROUP}/classroom/${cid}.json?md=${lf.obj.id}&group=${GROUP}&course=${cid}`, { credentials: 'include', headers: { 'x-nextjs-data': '1' } });
+            if (r.ok) { const j = await r.json(), rpp = j.pageProps || {}; let lm = null; JSON.stringify(rpp.course, (k, v) => { if (v && typeof v === 'object' && v.id === lf.obj.id && v.metadata) lm = v.metadata; return v; }); if (lm) { if (lm.desc) desc = lm.desc; if (lm.resources) resRaw = lm.resources; if (!url && (lm.videoLink || '').trim()) url = lm.videoLink.trim(); } pv = rpp.video || null; break; }
+          } catch (e) {}
+          await sleep(400 * (a + 1));
+        }
+        if (!url && pv && pv.playbackId && pv.playbackToken) { url = `https://stream.video.skool.com/${pv.playbackId}.m3u8?token=${pv.playbackToken}`; native++; } else if (url) ext++; else none++;
+        const desc_md = descToMd(desc); const resources = await resolveResources(resRaw);
+        vidItems.push({ trail: lf.trail, url }); metaItems.push({ trail: lf.trail, desc_md, resources });
+        await sleep(120);
+      }
+      const vidTree = [{ title: chapterTitle, url: '', children: clean(nest(vidItems, (n, it) => { n.url = it.url; }), true) }];
+      const metaTree = [{ title: chapterTitle, children: clean(nest(metaItems, (n, it) => { n.desc_md = it.desc_md; n.resources = it.resources; }), false) }];
+      return { ok: true, chapter: chapterTitle, safe: sanFile(chapterTitle), total, native, ext, none, vid: JSON.stringify(vidTree), meta: JSON.stringify(metaTree) };
+    }
+
     window.skoolDumpChapter = dumpChapter;
+    window.skoolDumpReturn = dumpReturn;
     window.skoolListChapters = skoolListChapters;
   
     /* ---------- tự nhận trang ---------- */
