@@ -3,7 +3,7 @@
 Giao dien (GUI) wizard cho Skool Archiver - tung buoc, danh cho NGUOI DUNG.
 Mo bang: double-click GiaoDien.cmd
 """
-import os, sys, queue, threading, subprocess
+import os, sys, re, queue, threading, subprocess
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
@@ -37,6 +37,8 @@ class App:
         self.chapters = []      # [{id,title,var}]
         self.course_name = None
         self.mode = None
+        self.admin = False      # che do test an (Ctrl+Alt+T)
+        self._dumping = False
 
         root.title("Skool Archiver")
         root.geometry("760x650"); root.minsize(700, 600)
@@ -50,6 +52,10 @@ class App:
                  font=(FT, 16, "bold")).pack(side="left", pady=12)
         self.step_lbl = tk.Label(head, text="", bg=BLUE, fg="#cfe0f3", font=(FT, 10))
         self.step_lbl.pack(side="right", padx=16)
+        self.badge = tk.Label(head, text="", bg=BLUE, fg="#ffd24d", font=(FT, 10, "bold"))
+        self.badge.pack(side="right", padx=4)
+        root.bind_all("<Control-Alt-t>", self.toggle_admin)
+        root.bind_all("<Control-Alt-T>", self.toggle_admin)
 
         # body (swap)
         self.body = tk.Frame(root, bg=BG); self.body.pack(fill="both", expand=True, padx=18, pady=12)
@@ -70,6 +76,12 @@ class App:
 
     def set_step(self, n, name):
         self.step_lbl.config(text=f"Bước {n}/4  ·  {name}")
+
+    def toggle_admin(self, *_):
+        self.admin = not self.admin
+        self.badge.config(text="🔧 TEST MODE" if self.admin else "")
+        self.write("== Chế độ TEST: BẬT (tải sẽ KHÔNG tải thật, chỉ kiểm tra) ==" if self.admin
+                   else "== Chế độ TEST: TẮT ==")
 
     def title(self, text, sub=""):
         tk.Label(self.body, text=text, bg=BG, fg=BLUE, font=(FT, 15, "bold")).pack(anchor="w")
@@ -289,9 +301,15 @@ class App:
         tk.Label(nm, text="Đặt tên khóa:", bg=BG, font=(FT, 10)).pack(side="left")
         self.name_var = tk.StringVar(value=group)
         tk.Entry(nm, textvariable=self.name_var, font=(FT, 11), width=30).pack(side="left", padx=8)
-        big_btn(self.dump_row, "3.  Tải dữ liệu các chương đã chọn  →", self.do_dump, color=BLUE).pack(pady=8)
+        self.b_dump = big_btn(self.dump_row, "3.  Tải dữ liệu các chương đã chọn  →", self.do_dump, color=BLUE)
+        self.b_dump.pack(pady=8)
+        self.dump_status = tk.Label(self.dump_row, text="", bg=BG, fg=BLUE, font=(FT, 10, "bold"))
+        self.dump_status.pack()
+        self.dump_pb = ttk.Progressbar(self.dump_row, mode="determinate", maximum=100, length=420)
 
     def do_dump(self):
+        if self._dumping:
+            return
         sel = [c for c in self.chapters if c["var"].get()]
         if not sel:
             messagebox.showinfo("Chưa chọn", "Hãy tick ít nhất 1 chương."); return
@@ -299,6 +317,11 @@ class App:
         if not name:
             messagebox.showinfo("Thiếu tên", "Hãy đặt tên khóa."); return
         self.course_name = name
+        self._dump_n = len(sel)
+        self._dumping = True
+        self.b_dump.config(state="disabled", text="⏳  Đang lấy dữ liệu...")
+        self.dump_status.config(text=f"Đang lấy dữ liệu: 0/{len(sel)} chương")
+        self.dump_pb.pack(pady=(0, 6)); self.dump_pb["value"] = 0
         out = C.BASE / "courses" / name
         self.write(f"Đang lấy dữ liệu {len(sel)} chương vào: {out}")
         self.sb.dump([{"id": c["id"], "title": c["title"]} for c in sel], out)
@@ -313,6 +336,10 @@ class App:
         self.opt_sub = tk.BooleanVar(value=True)
         tk.Checkbutton(self.body, text="  Tạo phụ đề tiếng Anh (chạy ngầm sau khi tải xong)",
                        variable=self.opt_sub, bg=BG, font=(FT, 11)).pack(anchor="w", pady=8)
+        self.opt_test = tk.BooleanVar(value=self.admin)
+        if self.admin:
+            tk.Checkbutton(self.body, text="  🔧 Chế độ TEST — chỉ kiểm tra, KHÔNG tải thật (dry-run)",
+                           variable=self.opt_test, bg=BG, fg="#9a6700", font=(FT, 11, "bold")).pack(anchor="w", pady=2)
         row = tk.Frame(self.body, bg=BG); row.pack(fill="x", pady=16)
         ttk.Button(row, text="←  Quay lại", command=self.show_step1).pack(side="left")
         big_btn(row, "▶  Bắt đầu tải", self.start_download, color="#1e7e34").pack(side="right")
@@ -324,6 +351,10 @@ class App:
         self.title("Đang tải khóa…", "Theo dõi tiến trình ở khung Nhật ký bên dưới. Bạn có thể bấm Dừng bất cứ lúc nào (chạy lại sẽ tiếp tục).")
         self.status4 = tk.Label(self.body, text="", bg=BG, fg=BLUE, font=(FT, 11, "bold"))
         self.status4.pack(anchor="w", pady=6)
+        self.pb4 = ttk.Progressbar(self.body, mode="determinate", maximum=100, length=540)
+        self.pb4.pack(anchor="w", pady=2)
+        self.run_lbl = tk.Label(self.body, text="⏳  Đang chạy…", bg=BG, fg="#1e7e34", font=(FT, 10, "bold"))
+        self.run_lbl.pack(anchor="w")
         self.done_row = tk.Frame(self.body, bg=BG); self.done_row.pack(fill="x", pady=10)
         self.btn_stop = big_btn(self.done_row, "■  Dừng", self.do_stop, color="#b02a37")
         self.btn_stop.pack(side="left")
@@ -340,6 +371,8 @@ class App:
         self.set_step(4, "Hoàn tất")
         for w in self.done_row.winfo_children(): w.destroy()
         self.refresh4()
+        if hasattr(self, "pb4"): self.pb4["value"] = 100
+        if hasattr(self, "run_lbl"): self.run_lbl.config(text="✓  Hoàn tất", fg=BLUE)
         self.status4.config(text=self.status4.cget("text") + "    ✓ XONG")
         if getattr(self, "opt_sub", None) and self.opt_sub.get():
             self.write("Bật phụ đề chạy ngầm...")
@@ -350,8 +383,12 @@ class App:
     # ---------- chay tien trinh ----------
     def start_download(self):
         args = ([] if not self.course_name else ["--course", self.course_name])
+        test = bool(getattr(self, "opt_test", None) and self.opt_test.get())
+        if test: args.append("--dry-run")
         self.show_step4()
-        self.start([PY, "main.py"] + args, "TẢI KHÓA", on_done=self.show_done)
+        if test:
+            self.run_lbl.config(text="🔧  CHẾ ĐỘ TEST — chỉ kiểm tra, không tải thật", fg="#9a6700")
+        self.start([PY, "main.py"] + args, "TẢI KHÓA" + (" (TEST)" if test else ""), on_done=self.show_done)
 
     def run_sub_on(self):
         c = self.course_name
@@ -383,6 +420,7 @@ class App:
             try: self.proc.terminate()
             except Exception: pass
             self.write("[Đã dừng]")
+            if hasattr(self, "run_lbl"): self.run_lbl.config(text="■  Đã dừng", fg="#b02a37")
 
     def open_folder(self):
         r = self.course_root(); r.mkdir(parents=True, exist_ok=True)
@@ -409,6 +447,10 @@ class App:
                     if getattr(self, "_on_done", None): self._on_done(); self._on_done = None
                 else:
                     self.write(s.rstrip("\n"))
+                    m = re.search(r"=\s*([\d.]+)%\]", s)
+                    if m and hasattr(self, "pb4"):
+                        try: self.pb4["value"] = float(m.group(1))
+                        except Exception: pass
         except queue.Empty:
             pass
         if hasattr(self, "status4") and self.proc:
@@ -428,9 +470,17 @@ class App:
             self.render_chapters(e["group"], e["chapters"])
         elif t == "dump_progress":
             self.write(f"[{e['i']}/{e['n']}] {e['title']}")
+            if hasattr(self, "dump_status"):
+                pct = round(e["i"] * 100 / max(1, e["n"]))
+                self.dump_status.config(text=f"Đang lấy dữ liệu: {e['i']}/{e['n']} chương ({pct}%) — {e['title']}")
+                self.dump_pb["value"] = pct
         elif t == "dumped":
+            self._dumping = False
             self.write(f"Đã lấy xong {e['ok']}/{e['total']} chương → {e['out_dir']}")
-            messagebox.showinfo("Xong", f"Đã lấy dữ liệu khóa.\nTiếp tục để tải video.")
+            if hasattr(self, "dump_status"):
+                self.dump_status.config(text=f"✓ Đã lấy {e['ok']}/{e['total']} chương")
+                self.dump_pb["value"] = 100
+            messagebox.showinfo("Xong", f"Đã lấy dữ liệu khóa ({e['ok']}/{e['total']} chương).\nTiếp tục để tải video.")
             self.show_step3()
         elif t == "error":
             self.write(f"[LỖI trình duyệt] {e['msg']}"); messagebox.showerror("Lỗi", e["msg"])
