@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 venv/
 logs/
+app/.browser/
+.browser/
 NOTIFICATIONS.log
 _*.log
 # Word/OS temp & lock files

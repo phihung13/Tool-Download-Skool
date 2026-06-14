@@ -2,6 +2,7 @@ yt-dlp>=2025.05.22     # can ban moi de co --js-runtimes (vuot YouTube bot-check
 faster-whisper        # engine transcribe nhanh/nhe (CTranslate2) - khuyen dung
 openai-whisper        # du phong (WHISPER_ENGINE = openai-whisper)
 ffmpeg-downloader
+playwright             # GUI: trinh duyet app tu dieu khien (sau cai chay: playwright install chromium)
 # Ngoai ra can Node.js (https://nodejs.org) lam JS runtime cho yt-dlp/YouTube.
 # Whisper keo theo torch (CPU). Muon GPU NVIDIA: cai torch ban CUDA rieng:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu121
