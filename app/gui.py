@@ -17,23 +17,23 @@ PY = sys.executable.replace("pythonw.exe", "python.exe")
 NO_WIN = 0x08000000 if os.name == "nt" else 0
 SENTINEL = "\x00DONE\x00"
 
-# ===== palette (light, friendly) =====
-BG = "#EEF2F7"; SIDE = "#0F1B2D"; SIDE_HI = "#1E3A5F"; CARD = "#FFFFFF"; CARD2 = "#F1F5F9"
-PRIMARY = "#2D6CDF"; PRIMARY_H = "#1E55BE"
-SUCCESS = "#1FA463"; WARNING = "#E0A100"; DANGER = "#E0483B"
-TEXT = "#13243B"; TEXT2 = "#6B7A90"; ON_SIDE = "#C7D4E6"; BORDER = "#E2E8F0"
+# ===== palette (light, monochrome / black & white) =====
+BG = "#F4F4F5"; SIDE = "#0A0A0B"; SIDE_HI = "#1C1C20"; CARD = "#FFFFFF"; CARD2 = "#ECECEE"
+PRIMARY = "#111114"; PRIMARY_H = "#2C2C31"
+SUCCESS = "#111114"; WARNING = "#52525B"; DANGER = "#3F3F46"
+TEXT = "#18181B"; TEXT2 = "#71717A"; ON_SIDE = "#A1A1AA"; BORDER = "#E4E4E7"
 FT = "Segoe UI"
 STEPS = ["Chọn khóa", "Lấy khóa", "Tùy chọn", "Tải về"]
-ICON = {"done": ("✓", SUCCESS), "loading": ("⏳", WARNING), "pending": ("•", TEXT2)}
+ICON = {"done": ("✓", "#111114"), "loading": ("⏳", "#52525B"), "pending": ("•", "#C7C7CC")}
 
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 
 def btn(parent, text, cmd, kind="primary", **kw):
-    pal = {"primary": (PRIMARY, PRIMARY_H, "white"), "success": (SUCCESS, "#17784A", "white"),
-           "danger": (DANGER, "#B5392E", "white"), "secondary": ("#E2E8F0", "#CBD5E1", TEXT),
-           "ghost": ("transparent", CARD2, PRIMARY), "warn": (WARNING, "#B98700", "white")}
+    pal = {"primary": (PRIMARY, PRIMARY_H, "white"), "success": (PRIMARY, PRIMARY_H, "white"),
+           "danger": (DANGER, "#27272A", "white"), "secondary": ("#E4E4E7", "#D4D4D8", TEXT),
+           "ghost": ("transparent", CARD2, TEXT), "warn": (DANGER, "#27272A", "white")}
     fg, hov, tc = pal.get(kind, pal["primary"])
     opt = dict(corner_radius=9, height=40, font=(FT, 13, "bold"), fg_color=fg, hover_color=hov, text_color=tc)
     if kind == "ghost": opt["border_width"] = 0
@@ -66,7 +66,7 @@ class App:
         ctk.CTkLabel(side, text="📦  Skool Archiver", font=(FT, 18, "bold"), text_color="white").pack(anchor="w", padx=22, pady=(26, 4))
         ctk.CTkLabel(side, text="Lưu trữ khóa học Skool", font=(FT, 11), text_color=ON_SIDE).pack(anchor="w", padx=22, pady=(0, 22))
         self.step_box = ctk.CTkFrame(side, fg_color="transparent"); self.step_box.pack(fill="x", padx=14)
-        self.badge = ctk.CTkLabel(side, text="", font=(FT, 12, "bold"), text_color=WARNING); self.badge.pack(side="bottom", anchor="w", padx=22, pady=(0, 8))
+        self.badge = ctk.CTkLabel(side, text="", font=(FT, 12, "bold"), text_color="white"); self.badge.pack(side="bottom", anchor="w", padx=22, pady=(0, 8))
         btn(side, "⚙  Kiểm tra môi trường", self.show_check, kind="ghost", text_color="white", hover_color=SIDE_HI, anchor="w").pack(side="bottom", fill="x", padx=14, pady=(0, 6))
 
         # ---------- main ----------
@@ -91,7 +91,8 @@ class App:
             fr = ctk.CTkFrame(self.step_box, fg_color=(SIDE_HI if active else "transparent"), corner_radius=9)
             fr.pack(fill="x", pady=3)
             dot = ctk.CTkLabel(fr, text=str(i), width=26, height=26, corner_radius=13,
-                               fg_color=(PRIMARY if active else "#27374D"), text_color="white", font=(FT, 12, "bold"))
+                               fg_color=("white" if active else "#2A2A2E"),
+                               text_color=("#0A0A0B" if active else ON_SIDE), font=(FT, 12, "bold"))
             dot.pack(side="left", padx=(8, 10), pady=8)
             ctk.CTkLabel(fr, text=name, font=(FT, 13, "bold" if active else "normal"),
                          text_color=("white" if active else ON_SIDE)).pack(side="left")
@@ -253,8 +254,8 @@ class App:
         try: miss = self.env_missing()
         except Exception: miss = []
         if miss:
-            ban = ctk.CTkFrame(self.content, fg_color="#FFF6DA", corner_radius=12, border_width=1, border_color="#F2D98B"); ban.pack(fill="x", pady=(0, 8))
-            ctk.CTkLabel(ban, text="⚠  Thiếu: " + ", ".join(m[0].split(" (")[0] for m in miss), text_color="#8A6D00", font=(FT, 12, "bold")).pack(side="left", padx=14, pady=10)
+            ban = ctk.CTkFrame(self.content, fg_color="#F4F4F5", corner_radius=12, border_width=1, border_color="#D4D4D8"); ban.pack(fill="x", pady=(0, 8))
+            ctk.CTkLabel(ban, text="⚠  Thiếu: " + ", ".join(m[0].split(" (")[0] for m in miss), text_color=TEXT, font=(FT, 12, "bold")).pack(side="left", padx=14, pady=10)
             btn(ban, "Kiểm tra & cài", self.show_check, kind="warn", width=140).pack(side="right", padx=10, pady=8)
         items = self.existing_courses(); card = self.card()
         if items:
