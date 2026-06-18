@@ -4,6 +4,12 @@ openai-whisper        # du phong (WHISPER_ENGINE = openai-whisper)
 ffmpeg-downloader
 playwright             # GUI: trinh duyet app tu dieu khien (sau cai chay: playwright install chromium)
 customtkinter          # GUI hien dai (giao dien wizard)
+# --- Tuy chon (Nhom A: Xuat & Bao cao) ---
+python-docx            # xuat ban Word (.docx) khi "Gop & xuat"; thieu thi van co ban .md
+deep-translator        # dich tieng Viet mien phi (Google) khi khong dat ANTHROPIC_API_KEY
+requests               # goi Claude API (dich/tom tat); thuong da co san
+send2trash             # nut "Xoa khoa" dua vao Thung rac (an toan); thieu thi xoa vinh vien
+# Tom tat + To-do bang AI can bien moi truong ANTHROPIC_API_KEY (Claude).
 # Ngoai ra can Node.js (https://nodejs.org) lam JS runtime cho yt-dlp/YouTube.
 # Whisper keo theo torch (CPU). Muon GPU NVIDIA: cai torch ban CUDA rieng:
 #   pip install torch --index-url https://download.pytorch.org/whl/cu121

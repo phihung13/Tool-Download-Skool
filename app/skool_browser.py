@@ -68,7 +68,10 @@ class SkoolBrowser:
     def send(self, **kw): self.cmd_q.put(kw)
     def open(self):  self.send(type="open")
     def list_chapters(self): self.send(type="list")
-    def dump(self, chapters, out_dir): self.send(type="dump", chapters=chapters, out_dir=str(out_dir))
+    def dump(self, chapters, out_dir, all_titles=None):
+        """chapters = subset can lay [{id,title}]; all_titles = thu tu DAY DU cua khoa
+           (de _chapters.json + so thu tu file on dinh khi chi lay 1 phan khoa)."""
+        self.send(type="dump", chapters=chapters, out_dir=str(out_dir), all_titles=all_titles)
     def quit(self): self.send(type="quit")
 
     def _run(self):
@@ -160,9 +163,14 @@ class SkoolBrowser:
             self.emit(type="chapters", group=data["group"], chapters=data["chapters"])
         elif t == "dump":
             chapters = cmd["chapters"]; out = Path(cmd["out_dir"])
+            all_titles = cmd.get("all_titles")
             out.mkdir(parents=True, exist_ok=True)
+            # _chapters.json giu thu tu DAY DU cua khoa (khong de subset ghi de mat thu tu).
+            order_titles = all_titles if all_titles else [c["title"] for c in chapters]
             (out / "_chapters.json").write_text(
-                json.dumps([c["title"] for c in chapters], ensure_ascii=False, indent=2), encoding="utf-8")
+                json.dumps(order_titles, ensure_ascii=False, indent=2), encoding="utf-8")
+            # so thu tu file = vi tri chuong trong khoa day du -> on dinh khi re-dump 1 phan.
+            pos = {t: i + 1 for i, t in enumerate(order_titles)}
             grp = self.group or page.url.split("/")[3]
             ok = 0
             for idx, c in enumerate(chapters, 1):
@@ -179,7 +187,8 @@ class SkoolBrowser:
                     res = page.evaluate(JS_DUMP)
                     if not res or not res.get("ok"):
                         self.emit(type="log", msg=f"  [bo qua] {c['title']}: {res.get('err') if res else 'loi'}"); continue
-                    safe = f"{idx:02d}_{san_file(res['chapter'])}"   # so thu tu -> ten file khong trung
+                    n = pos.get(c["title"]) or pos.get(res["chapter"]) or idx
+                    safe = f"{n:02d}_{san_file(res['chapter'])}"   # so thu tu on dinh -> ten file khong trung
                     (out / f"vid__{safe}.json").write_text(res["vid"], encoding="utf-8")
                     (out / f"meta__{safe}.json").write_text(res["meta"], encoding="utf-8")
                     ok += 1

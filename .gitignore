@@ -4,6 +4,8 @@ venv/
 logs/
 app/.browser/
 .browser/
+app/.settings.json
+.settings.json
 NOTIFICATIONS.log
 _*.log
 # Word/OS temp & lock files

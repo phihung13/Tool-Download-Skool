@@ -29,6 +29,7 @@ def san_file(name):
     return name[:150].rstrip(" .") or "file"
 
 def one_chapter(roots):
+    if not roots: return {"title": "", "children": []}   # file vid_*.json rong ([]) -> bo qua an toan
     withkids = [r for r in roots if r.get("children")]
     main = withkids[0] if withkids else roots[0]
     for e in [r for r in roots if r is not main]:

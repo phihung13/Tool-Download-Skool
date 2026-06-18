@@ -1,4 +1,4 @@
-import sys, time, subprocess
+import os, sys, time, subprocess
 from collections import deque
 from pathlib import Path
 import common as K
@@ -6,6 +6,14 @@ import config as C
 
 def passes(url):
     return bool(url) and (not C.ONLY_HOSTS or any(h in url for h in C.ONLY_HOSTS))
+
+def chap_ok(ct):
+    return (not C.ONLY_CHAPTER) or ct == C.ONLY_CHAPTER
+
+def lesson_ok(folder):
+    if not C.ONLY_LESSON: return True
+    rel = str(folder).replace(str(C.ROOT) + os.sep, "")
+    return rel == C.ONLY_LESSON
 
 def count_urls(nodes):
     c = 0
@@ -100,10 +108,13 @@ def run():
     if not chapters: print("Khong co vid_*.json -> bo qua\n"); return []
     plan = []; total = 0
     for ct, f, course in chapters:
+        if not chap_ok(ct): continue
         chap = K.find_chapter_folder(ct)
         lessons = K.walk(course.get("children") or [], chap or C.ROOT)
-        total += sum(1 for _, n in lessons if passes(n.get("url")))
+        total += sum(1 for fd, n in lessons if passes(n.get("url")) and lesson_ok(fd))
         plan.append((chap, lessons, ct))
+    if C.ONLY_CHAPTER or C.ONLY_LESSON:
+        print(f"(loc: chuong={C.ONLY_CHAPTER or 'tat ca'} bai={C.ONLY_LESSON or 'tat ca'})")
     print(f"Tong video luot nay: {total}\n")
     idx = tai = skip = loi = miss = 0
     fails = []   # (folder, ma, mo ta, fix)
@@ -115,7 +126,7 @@ def run():
             print(f"=== [{chap.name}] ===")
             for folder, node in lessons:
                 url = node.get("url")
-                if not url or not passes(url): continue
+                if not url or not passes(url) or not lesson_ok(folder): continue
                 idx += 1
                 pct = round(idx * 100 / total, 1) if total else 0
                 host = url.split("/")[2] if "://" in url else url[:24]

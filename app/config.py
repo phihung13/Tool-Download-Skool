@@ -41,8 +41,10 @@ CHAP_PATTERN = "Chap*.json"    # cay chuong (tuy chon - de danh so chuong khi ta
 STRIP_EMOJI  = True
 
 # ===================== VIDEO =====================
-DRY_RUN    = False
-ONLY_HOSTS = []                # [] = tat ca; ["stream.video.skool.com"] = chi native
+DRY_RUN     = False
+ONLY_HOSTS  = []               # [] = tat ca; ["stream.video.skool.com"] = chi native
+ONLY_CHAPTER = None            # ten chuong (da san) -> chi tai chuong nay (GUI: tai 1 chuong)
+ONLY_LESSON  = None            # duong dan tuong doi bai (vs course root) -> chi tai 1 bai
 JS_RUNTIME = "node"            # JS runtime cho yt-dlp de vuot "Sign in to confirm you're not a bot"
                                #   (deno/node). "" = tat. Yeu cau cai san (Node.js hoac Deno).
 YT_COOKIES_FILE    = ""        # duong dan cookies.txt (Netscape) neu can dang nhap; "" = tat
